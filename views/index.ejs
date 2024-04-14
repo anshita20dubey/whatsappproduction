@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Document</title>
+    <link rel='stylesheet' href='/stylesheets/style.css' />
+    <link
+    href="https://cdn.jsdelivr.net/npm/remixicon@4.1.0/fonts/remixicon.css"
+    rel="stylesheet"
+/>
+  </head>
+  <body>
+ <div id="main">
+  <div id="left">
+    <div class="top">
+      <div class="loggedinuserDiv">
+        <div class="user">
+          <img src="<%= loggedInUser.profileImage%>" alt="">
+          <h3><%= loggedInUser.username %></h3>
+        </div>
+        <div style="display: flex; gap: 16px;">
+          <button onclick="joinGroup()"><i class="ri-user-add-line"></i></button>
+          <button onclick="createNewGroup()">
+            <i class="ri-add-line"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="bottom">
+      <div class="chats">
+        
+      </div>
+    </div>
+  </div>
+  <div id="right">
+    <div class="top">
+      <div id="currentChatUser" class="user">
+        <img src="https://imgs.search.brave.com/0bM_YGELGhDRpkha170xdj62rM1gANg5mUFtcD3Jcqw/rs:fit:860:0:0/g:ce/aHR0cHM6Ly9pLnBp/bmltZy5jb20vb3Jp/Z2luYWxzLzJmLzU5/L2VmLzJmNTllZjc0/M2ZkYjliZmNmN2Yw/YTIxYjYzYTAwZjdl/LmpwZw " alt="">
+        <h3>username</h3>
+      </div>
+    </div>
+    <div class="middle">
+      <div class="conversationArea">
+        
+      </div>
+    </div>
+    <div class="bottom">
+      <input type="text" placeholder="Enter Message">
+      <button onclick="sendMessage()">send</button>
+    </div>
+  </div>
+ </div>
+ <script src="/socket.io/socket.io.js"></script>
+ <script>
+
+     var socket = io();
+     socket.emit('join-server',{
+      username: `<%= loggedInUser.username %>`,
+      profileImage: `<%= loggedInUser.profileImage %>`,
+     })
+
+     socket.on('new-user-join', userDetails => {
+      appendChat(userDetails.profileImage, userDetails.username);
+     })
+
+ </script>
+ <script>
+  let currentChatUser = null;
+  const sender = `<%= loggedInUser.username %>`
+
+  function putIncomingMessage(message){
+    const template = `<div class="msg incoming">
+          ${message}
+        </div>`
+        document.querySelector(".conversationArea").innerHTML +=template
+  }
+
+  function OutgoingMessage(message){
+   const template =`  <div class="msg Outgoing">
+         ${message}
+        </div>`
+        document.querySelector(".conversationArea").innerHTML+=template
+  }
+
+  function sendMessage(msg){
+    const message = document.querySelector('#right .bottom input').value
+    OutgoingMessage(message)
+    document.querySelector('#right .bottom input').value="";
+
+    socket.emit('private-message', {
+      message,
+      receiver: currentChatUser,
+      sender: `<%= loggedInUser.username %>`
+    })
+
+    socket.on('receive-private-message', messageObject=>{
+      putIncomingMessage(messageObject.message)
+    })
+  }
+
+  function appendChat(profileImage,username){
+    if(document.querySelector(`#${username}`)){
+      return;
+    }
+    const template = `<div onclick="createNewConversation('${profileImage}','${username}')" class="chat" id="${username}">
+          <div class="user">
+            <img src="${profileImage}" alt="">
+            <h3>${username}</h3>
+          </div>
+        </div>`
+
+    document.querySelector(".chats").innerHTML += template;
+  }
+
+  function createNewConversation(profileImage,username){
+    currentChatUser = username
+    document.querySelector('#main > #right').style.display = "initial";
+    document.querySelector("#currentChatUser img").setAttribute("src",profileImage);
+    document.querySelector("#currentChatUser h3").textContent = username;
+    document.querySelector('.conversationArea').innerHTML = "";
+
+    socket.emit('fetch-conversation',{
+      receiver: username, // insta
+      sender: sender // user
+    })
+  }
+
+  socket.on('send-conversation',allMessages=>{
+    allMessages.forEach(message=>{
+      if(message.sender === sender /* loggedInUser*/){
+        OutgoingMessage(message.msg);
+      }
+      else{
+        putIncomingMessage(message.msg);
+      }
+    })
+  })
+ 
+  function createNewGroup(){
+    const groupName = prompt('Enter Group Name:');
+    if(!groupName) {return}
+    socket.emit('create-new-group', {
+      sender, // loggedInUser
+      groupName});
+  }
+
+  socket.on('group-created',newGroup=>{
+    appendChat(newGroup.profileImage, newGroup.name);
+  })
+
+  socket.on('group-joined',groupDetails=>{
+    appendChat(groupDetails.profileImage, groupDetails.name);
+  })
+
+  function joinGroup(){
+    const groupName = prompt('enter group name to join:');
+
+    socket.emit('join-group',{
+      groupName,
+      sender,
+    })
+  }
+
+ </script>
+  </body>
+</html>
